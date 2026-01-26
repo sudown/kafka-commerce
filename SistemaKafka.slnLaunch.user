@@ -1,0 +1,15 @@
+[
+  {
+    "Name": "Novo Perfil",
+    "Projects": [
+      {
+        "Path": "SistemaPedidos.API\\SistemaPedidos.API.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "SistemaNotificacao.Worker\\SistemaNotificacao.Worker.csproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]
