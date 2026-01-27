@@ -1,5 +1,8 @@
 using Confluent.Kafka;
+using Polly;
+using Polly.Retry;
 using SistemaBase.Shared;
+using System.Text;
 using System.Text.Json;
 
 namespace SistemaNotificacao.Worker;
@@ -9,10 +12,22 @@ public class Worker : BackgroundService
     private readonly ILogger<Worker> _logger;
     private readonly IConsumer<string, string> _consumer;
     private const string Topic = "pedidos-realizados";
+    private readonly AsyncRetryPolicy _retryPolicy;
+    private readonly IProducer<string, string> _dlqProducer;
 
     public Worker(ILogger<Worker> logger, IConfiguration configuration)
     {
         _logger = logger;
+
+        _retryPolicy = Policy
+        .Handle<Exception>()
+        .WaitAndRetryAsync(3, retryAttempt =>
+            TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+            (exception, timeSpan, retryCount, context) =>
+            {
+                _logger.LogWarning($"Falha temporária: Tentativa {retryCount}. Re-tentando em {timeSpan.Seconds}s. Erro: {exception.Message}");
+            });
+
         var config = new ConsumerConfig
         {
             BootstrapServers = configuration["Kafka:BootstrapServers"],
@@ -37,16 +52,22 @@ public class Worker : BackgroundService
 
                 if (consumeResult != null)
                 {
-                    var pedido = JsonSerializer.Deserialize<PedidoEvent>(consumeResult.Message.Value);
+                    await _retryPolicy.ExecuteAsync(async () =>
+                    {
+                        var pedido = JsonSerializer.Deserialize<PedidoEvent>(consumeResult.Message.Value);
 
-                    _logger.LogInformation("--- NOTIFICAÇÃO ---");
-                    _logger.LogInformation($"Enviando e-mail para o cliente do pedido: {pedido?.PedidoId}");
+                        _logger.LogInformation($"Processando notificação do pedido {pedido.PedidoId}...");
 
-                    // Simula um processamento (envio de e-mail)
-                    await Task.Delay(1000, stoppingToken);
+                        // SIMULAÇÃO DE ERRO: 
+                        // Se você quiser testar o retry, descomente a linha abaixo:
+                        //throw new Exception("Serviço de e-mail fora do ar!");
 
-                    // Confirma que a mensagem foi processada com sucesso
-                    _consumer.Commit(consumeResult);
+                        await EnviarEmailFake(pedido);
+
+                        // Só fazemos o Commit se o Polly chegar até aqui com sucesso
+                        _consumer.Commit(consumeResult);
+                        _logger.LogInformation($"Pedido {pedido.PedidoId} processado e confirmado.");
+                    });
                 }
             }
             catch (Exception ex)
@@ -54,6 +75,27 @@ public class Worker : BackgroundService
                 _logger.LogError($"Erro ao processar mensagem: {ex.Message}");
             }
         }
+    }
+
+    public static Task EnviarEmailFake(PedidoEvent pedido)
+    {
+        // Simula o envio de e-mail
+        Console.WriteLine($"[E-MAIL] Pedido {pedido.PedidoId} para o cliente {pedido.ClienteId} no valor de {pedido.ValorTotal:C} foi recebido.");
+        return Task.CompletedTask;
+    }
+
+    private async Task EnviarParaDlq(Message<string, string> message)
+    {
+        // Aqui você usa um Producer simples para enviar para "pedidos-realizados-dlq"
+        // Adicione um Header informando o motivo do erro (boa prática de analista!)
+        var header = new Headers { { "error-message", Encoding.UTF8.GetBytes("Falha após 3 retentativas") } };
+
+        await _dlqProducer.ProduceAsync("pedidos-realizados-dlq", new Message<string, string>
+        {
+            Key = message.Key,
+            Value = message.Value,
+            Headers = header
+        });
     }
 
     public override void Dispose()
