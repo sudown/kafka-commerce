@@ -9,6 +9,10 @@
       {
         "Path": "SistemaNotificacao.Worker\\SistemaNotificacao.Worker.csproj",
         "Action": "Start"
+      },
+      {
+        "Path": "SistemaEstoque.Worker\\SistemaEstoque.Worker.csproj",
+        "Action": "Start"
       }
     ]
   }

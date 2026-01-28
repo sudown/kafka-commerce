@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace SistemaEstoque.Worker.Entities
 {
-    internal class Produto
+    public class Produto
     {
         public Guid Id { get; private set; }
         public string Nome { get; private set; }
@@ -23,6 +23,15 @@ namespace SistemaEstoque.Worker.Entities
             QuantidadeEstoque = quantidadeEstoque;
             PrecoUnitario = precoUnitario;
 
+        }
+
+        public void BaixarEstoque(int quantidade)
+        {
+            if (quantidade <= 0)
+                throw new ArgumentException("A quantidade a ser baixada deve ser maior que zero.");
+            if (QuantidadeEstoque < quantidade)
+                throw new InvalidOperationException("Estoque insuficiente para a operação.");
+            QuantidadeEstoque -= quantidade;
         }
     }
 }
