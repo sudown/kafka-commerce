@@ -1,24 +1,20 @@
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Conventions;
+using MongoDB.Bson.Serialization.Serializers;
+using SistemaPedidos.API.Config;
+using SistemaPedidos.API.Config.Extensions;
 using SistemaPedidos.API.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Adiciona apenas o necessário para o Swagger funcionar
 builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-
-builder.Services.AddSingleton<IKafkaProducerService, KafkaProducerService>();
+builder.Services.AddInfrastructure(builder.Configuration);
 
 var app = builder.Build();
 
-// Remove o bloco try-catch após testar, ou mantenha apenas o if
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-
+app.UseSwaggerDocumentation(app.Environment);
 app.UseHttpsRedirection();
-app.MapControllers(); // Agora o Reflection vai carregar tudo sem conflitos
+app.MapControllers();
 
 app.Run();

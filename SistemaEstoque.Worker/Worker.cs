@@ -1,4 +1,6 @@
 using Confluent.Kafka;
+using Polly;
+using Polly.Retry;
 using SistemaBase.Shared;
 using SistemaEstoque.Worker.Interfaces;
 using SistemaEstoque.Worker.UseCases;
@@ -11,11 +13,15 @@ public class Worker : BackgroundService
     private readonly ILogger<Worker> _logger;
     private readonly IServiceScopeFactory _scopeFactory; // Essencial para Singletons
     private readonly IConsumer<string, string> _consumer;
+    private readonly AsyncRetryPolicy _retryPolicy;
 
     public Worker(ILogger<Worker> logger, IConfiguration configuration, IServiceScopeFactory scopeFactory)
     {
         _logger = logger;
         _scopeFactory = scopeFactory;
+        _retryPolicy = Policy
+        .Handle<Exception>()
+        .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
 
         var config = new ConsumerConfig
         {
@@ -42,10 +48,22 @@ public class Worker : BackgroundService
                 var baixarEstoqueUseCase = scope.ServiceProvider.GetRequiredService<BaixarEstoqueUseCase>();
                 var pedido = JsonSerializer.Deserialize<PedidoEvent>(result.Message.Value);
 
-                _logger.LogInformation($"Processando estoque do pedido {pedido.PedidoId}");
-
-                await baixarEstoqueUseCase.ExecutarAsync(pedido);
-                _consumer.Commit(result);
+                await _retryPolicy.ExecuteAsync(async () =>
+                {
+                    var sucesso = await baixarEstoqueUseCase.ExecutarAsync(pedido);
+                    if (sucesso)
+                    {
+                        _consumer.Commit(result);
+                    }
+                    else
+                    {
+                        // Se o UseCase retornou falso (ex: produto não existe), 
+                        // talvez não adiante tentar de novo (erro de negócio).
+                        // Aqui você decidiria se manda para a DLQ.
+                        _logger.LogWarning($"Pedido {pedido.PedidoId} não pôde ser processado por regra de negócio.");
+                        _consumer.Commit(result);
+                    }
+                });
             }
         }
     }
