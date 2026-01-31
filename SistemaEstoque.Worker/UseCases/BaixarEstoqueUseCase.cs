@@ -12,11 +12,12 @@ using System.Threading.Tasks;
 
 namespace SistemaEstoque.Worker.UseCases
 {
-    internal class BaixarEstoqueUseCase(ILogger<BaixarEstoqueUseCase> logger, IEstoqueRepository EstoqueRepository, IPedidoProcessadoRepository pedidoProcessadoRepository)
+    internal class BaixarEstoqueUseCase(ILogger<BaixarEstoqueUseCase> logger, IEstoqueRepository EstoqueRepository, IPedidoProcessadoRepository pedidoProcessadoRepository, IUnitOfWork unitOfWork)
     {
         private readonly ILogger<BaixarEstoqueUseCase> _logger = logger;
         private readonly IEstoqueRepository _repository = EstoqueRepository;
         private readonly IPedidoProcessadoRepository _pedidoProcessadoRepository = pedidoProcessadoRepository;
+        private readonly IUnitOfWork _unitOfWork = unitOfWork;
 
         public async Task<ProcessamentoEstoqueResult> ExecutarAsync(PedidoEvent pedido)
         {
@@ -51,7 +52,7 @@ namespace SistemaEstoque.Worker.UseCases
                     _repository.Atualizar(produto);
                 }
 
-                await _repository.SalvaAsync();
+                await _unitOfWork.SalvaAsync();
                 await MostrarPainelEstoque();
                 return new ProcessamentoEstoqueResult(true);
             }

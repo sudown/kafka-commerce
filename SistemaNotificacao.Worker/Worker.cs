@@ -84,20 +84,6 @@ public class Worker : BackgroundService
         return Task.CompletedTask;
     }
 
-    private async Task EnviarParaDlq(Message<string, string> message)
-    {
-        // Aqui você usa um Producer simples para enviar para "pedidos-realizados-dlq"
-        // Adicione um Header informando o motivo do erro (boa prática de analista!)
-        var header = new Headers { { "error-message", Encoding.UTF8.GetBytes("Falha após 3 retentativas") } };
-
-        await _dlqProducer.ProduceAsync("pedidos-realizados-dlq", new Message<string, string>
-        {
-            Key = message.Key,
-            Value = message.Value,
-            Headers = header
-        });
-    }
-
     public override void Dispose()
     {
         _consumer.Close();

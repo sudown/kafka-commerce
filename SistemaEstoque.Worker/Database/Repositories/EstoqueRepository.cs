@@ -33,10 +33,5 @@ namespace SistemaEstoque.Worker.Database.Repositories
         {
             return await _context.Produtos.AsNoTracking().ToListAsync();
         }
-
-        public Task SalvaAsync()
-        {
-            return _context.SaveChangesAsync();
-        }
     }
 }

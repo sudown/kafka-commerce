@@ -12,7 +12,6 @@ namespace SistemaEstoque.Worker.Interfaces
         void CriarAsync(Produto produto);
         void Atualizar(Produto produto);
         Task<Produto?> BuscarPorIdAsync(Guid id);
-        Task SalvaAsync();
         Task<List<Produto>> ObterTodosAsync();
     }
 }

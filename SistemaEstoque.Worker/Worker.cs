@@ -45,7 +45,6 @@ public class Worker : BackgroundService
             var result = _consumer.Consume(stoppingToken);
             if (result == null) continue;
 
-            // Dentro do ExecuteAsync, no loop do Consumer...
             using var scope = _scopeFactory.CreateScope();
             var useCase = scope.ServiceProvider.GetRequiredService<BaixarEstoqueUseCase>();
             var pedido = JsonSerializer.Deserialize<PedidoEvent>(result.Message.Value);
@@ -71,7 +70,6 @@ public class Worker : BackgroundService
             }
             catch (Exception)
             {
-                // CENTRALIZADO: Após 3 tentativas de infra, vai para a DLQ Técnica
                 _logger.LogCritical("[DLQ] Falha técnica definitiva no pedido {PedidoId}", pedido.PedidoId);
                 await _kafkaProducer.PublicarAsync("pedidos-erro-tecnico", pedido);
                 _consumer.Commit(result);

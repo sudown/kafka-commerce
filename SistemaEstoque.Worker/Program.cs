@@ -15,6 +15,7 @@ builder.Services.AddDbContext<EstoqueDbContext>(options =>
 builder.Services.AddScoped<IEstoqueRepository, EstoqueRepository>();
 builder.Services.AddScoped<IPedidoProcessadoRepository, PedidoProcessadoRepository>();
 builder.Services.AddSingleton<IKafkaProducerService, KafkaProducerService>();
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<BaixarEstoqueUseCase>();
 builder.Services.AddLogging();
 
