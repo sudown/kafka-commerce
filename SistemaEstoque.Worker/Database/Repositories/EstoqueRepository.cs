@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace SistemaEstoque.Worker.Database.Repositories
 {
-    public class EstoqueRepository(EstoqueDbContext context) : IEstoqueRepository
+    internal class EstoqueRepository(EstoqueDbContext context) : IEstoqueRepository
     {
         private readonly EstoqueDbContext _context = context;
 

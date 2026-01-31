@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace SistemaEstoque.Worker.Interfaces
 {
-    public interface IEstoqueRepository
+    internal interface IEstoqueRepository
     {
         void CriarAsync(Produto produto);
         void Atualizar(Produto produto);

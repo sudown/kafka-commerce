@@ -1,4 +1,5 @@
-﻿using SistemaPedidos.API.Services;
+﻿using SistemaBase.Shared.Services;
+using SistemaPedidos.API.Services;
 
 namespace SistemaPedidos.API.Config.Extensions
 {

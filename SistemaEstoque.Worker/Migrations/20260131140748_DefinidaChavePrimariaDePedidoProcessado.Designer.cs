@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using SistemaEstoque.Worker.Database.Context;
@@ -11,9 +12,11 @@ using SistemaEstoque.Worker.Database.Context;
 namespace SistemaEstoque.Worker.Migrations
 {
     [DbContext(typeof(EstoqueDbContext))]
-    partial class EstoqueDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260131140748_DefinidaChavePrimariaDePedidoProcessado")]
+    partial class DefinidaChavePrimariaDePedidoProcessado
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

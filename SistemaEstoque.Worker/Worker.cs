@@ -15,8 +15,9 @@ public class Worker : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory; // Essencial para Singletons
     private readonly IConsumer<string, string> _consumer;
     private readonly AsyncRetryPolicy _retryPolicy;
+    private readonly IKafkaProducerService _kafkaProducer; // Injetado no construtor
 
-    public Worker(ILogger<Worker> logger, IConfiguration configuration, IServiceScopeFactory scopeFactory)
+    public Worker(ILogger<Worker> logger, IConfiguration configuration, IServiceScopeFactory scopeFactory, IKafkaProducerService kafkaProducer)
     {
         _logger = logger;
         _scopeFactory = scopeFactory;
@@ -32,6 +33,7 @@ public class Worker : BackgroundService
             EnableAutoCommit = false
         };
         _consumer = new ConsumerBuilder<string, string>(config).Build();
+        _kafkaProducer = kafkaProducer;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -46,7 +48,6 @@ public class Worker : BackgroundService
             // Dentro do ExecuteAsync, no loop do Consumer...
             using var scope = _scopeFactory.CreateScope();
             var useCase = scope.ServiceProvider.GetRequiredService<BaixarEstoqueUseCase>();
-            var kafkaProducer = scope.ServiceProvider.GetRequiredService<IKafkaProducerService>();
             var pedido = JsonSerializer.Deserialize<PedidoEvent>(result.Message.Value);
 
             try
@@ -57,23 +58,22 @@ public class Worker : BackgroundService
 
                     if (resultado.Sucesso)
                     {
-                        _logger.LogInformation($"[SUCESSO] Pedido {pedido.PedidoId} processado.");
+                        _logger.LogInformation("[SUCESSO] Pedido {PedidoId} processado.", pedido.PedidoId);
                     }
                     else if (resultado.ErroNegocio)
                     {
-                        // CENTRALIZADO: Erro de negócio vai para o tópico de compensação
                         _logger.LogWarning($"[NEGÓCIO] Desviando pedido {pedido.PedidoId} para estorno: {resultado.MensagemErro}");
-                        await kafkaProducer.PublicarAsync("pedidos-estoque-insuficiente", pedido);
+                        await _kafkaProducer.PublicarAsync("pedidos-estoque-insuficiente", pedido);
                     }
 
                     _consumer.Commit(result);
                 });
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 // CENTRALIZADO: Após 3 tentativas de infra, vai para a DLQ Técnica
-                _logger.LogCritical($"[DLQ] Falha técnica definitiva no pedido {pedido.PedidoId}");
-                await kafkaProducer.PublicarAsync("pedidos-erro-tecnico", pedido);
+                _logger.LogCritical("[DLQ] Falha técnica definitiva no pedido {PedidoId}", pedido.PedidoId);
+                await _kafkaProducer.PublicarAsync("pedidos-erro-tecnico", pedido);
                 _consumer.Commit(result);
             }
         }

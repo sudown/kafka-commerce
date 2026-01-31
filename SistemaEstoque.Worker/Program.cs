@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SistemaBase.Shared.Services;
 using SistemaEstoque.Worker;
 using SistemaEstoque.Worker.Database.Context;
 using SistemaEstoque.Worker.Database.Repositories;
@@ -12,6 +13,8 @@ builder.Services.AddDbContext<EstoqueDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddScoped<IEstoqueRepository, EstoqueRepository>();
+builder.Services.AddScoped<IPedidoProcessadoRepository, PedidoProcessadoRepository>();
+builder.Services.AddSingleton<IKafkaProducerService, KafkaProducerService>();
 builder.Services.AddScoped<BaixarEstoqueUseCase>();
 builder.Services.AddLogging();
 

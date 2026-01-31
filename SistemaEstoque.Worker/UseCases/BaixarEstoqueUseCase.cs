@@ -1,4 +1,5 @@
 ﻿using SistemaBase.Shared;
+using SistemaEstoque.Worker.Entities;
 using SistemaEstoque.Worker.Interfaces;
 using SistemaEstoque.Worker.Results;
 using System;
@@ -11,13 +12,21 @@ using System.Threading.Tasks;
 
 namespace SistemaEstoque.Worker.UseCases
 {
-    public class BaixarEstoqueUseCase(ILogger<BaixarEstoqueUseCase> logger, IEstoqueRepository repository)
+    internal class BaixarEstoqueUseCase(ILogger<BaixarEstoqueUseCase> logger, IEstoqueRepository EstoqueRepository, IPedidoProcessadoRepository pedidoProcessadoRepository)
     {
         private readonly ILogger<BaixarEstoqueUseCase> _logger = logger;
-        private readonly IEstoqueRepository _repository = repository;
+        private readonly IEstoqueRepository _repository = EstoqueRepository;
+        private readonly IPedidoProcessadoRepository _pedidoProcessadoRepository = pedidoProcessadoRepository;
 
         public async Task<ProcessamentoEstoqueResult> ExecutarAsync(PedidoEvent pedido)
         {
+            var pedidoJaProcessado = await _pedidoProcessadoRepository.PedidoJaProcessadoAsync(pedido.PedidoId);
+            if(pedidoJaProcessado)
+            {
+                _logger.LogWarning("[IDEMPOTENCIA] Pedido {PedidoId} já foi processado anteriormente. Ignorando.", pedido.PedidoId);
+                return new ProcessamentoEstoqueResult(true);
+            }
+
             try
             {
                 foreach (var item in pedido.Itens)
@@ -38,6 +47,7 @@ namespace SistemaEstoque.Worker.UseCases
                         return new ProcessamentoEstoqueResult(false, "Estoque insuficiente", true);
                     }
 
+                    await _pedidoProcessadoRepository.RegistrarProcessamentoAsync(new PedidoProcessado(pedido.PedidoId));
                     _repository.Atualizar(produto);
                 }
 
@@ -47,7 +57,7 @@ namespace SistemaEstoque.Worker.UseCases
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"[TÉCNICO] Falha de infraestrutura no pedido {pedido.PedidoId}");
+                _logger.LogError(ex, "[TÉCNICO] Falha de infraestrutura no pedido {PedidoId}", pedido.PedidoId);
                 throw; // Lança para o Worker capturar no Polly
             }
         }
