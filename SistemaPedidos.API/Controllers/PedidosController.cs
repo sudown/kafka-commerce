@@ -49,7 +49,7 @@ namespace SistemaPedidos.API.Controllers
 
             await _kafkaService.PublicarAsync("pedidos-realizados", pedido, headers);
 
-            return Accepted(new { CorrelationId = correlationId });
+            return Accepted(new { CorrelationId = correlationId, PedidoId = pedido.PedidoId });
         }
 
         [HttpGet("{id:guid}")]

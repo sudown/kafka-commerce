@@ -25,5 +25,13 @@ namespace SistemaPedidos.API.Services
         {
             return await _pedidos.Find(p => p.PedidoId == pedidoId).FirstOrDefaultAsync();
         }
+
+        public async Task AtualizarStatusAsync(Guid pedidoId, string novoStatus)
+        {
+            var filter = Builders<PedidoEvent>.Filter.Eq(p => p.PedidoId, pedidoId);
+            var update = Builders<PedidoEvent>.Update.Set(p => p.Status, novoStatus);
+
+            await _pedidos.UpdateOneAsync(filter, update);
+        }
     }
 }

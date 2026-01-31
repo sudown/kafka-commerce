@@ -43,7 +43,7 @@ namespace SistemaEstoque.Worker.UseCases
                     {
                         produto.BaixarEstoque(item.Quantidade);
                     }
-                    catch (ArgumentException)
+                    catch (InvalidOperationException)
                     {
                         return new ProcessamentoEstoqueResult(false, "Estoque insuficiente", true);
                     }

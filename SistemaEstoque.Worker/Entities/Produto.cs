@@ -23,7 +23,7 @@ namespace SistemaEstoque.Worker.Entities
         public void BaixarEstoque(int quantidade)
         {
             if (quantidade <= 0)
-                throw new ArgumentException("A quantidade a ser baixada deve ser maior que zero.");
+                throw new InvalidOperationException("A quantidade a ser baixada deve ser maior que zero.");
             if (QuantidadeEstoque < quantidade)
                 throw new InvalidOperationException("Estoque insuficiente para a operação.");
             QuantidadeEstoque -= quantidade;

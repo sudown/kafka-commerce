@@ -2,12 +2,14 @@ using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Conventions;
 using MongoDB.Bson.Serialization.Serializers;
+using SistemaPedidos.API.BackgroundServices;
 using SistemaPedidos.API.Config;
 using SistemaPedidos.API.Config.Extensions;
 using SistemaPedidos.API.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddHostedService<SagaEstornoWorker>();
 builder.Services.AddControllers();
 builder.Services.AddInfrastructure(builder.Configuration);
 

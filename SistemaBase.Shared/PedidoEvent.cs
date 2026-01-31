@@ -15,6 +15,7 @@ namespace SistemaBase.Shared
         public Guid PedidoId { get;  set; }
         public Guid ClienteId { get;  set; }
         public decimal ValorTotal { get;  set; }
+        public string Status { get; set; } = "PROCESSANDO";
         public DateTime DataCriacao { get;  set; }
 
         // Lista simples de itens (apenas o essencial)

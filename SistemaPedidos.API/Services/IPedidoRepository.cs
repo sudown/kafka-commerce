@@ -6,5 +6,6 @@ namespace SistemaPedidos.API.Services
     {
         Task CriarAsync(PedidoEvent pedido);
         Task<PedidoEvent?> BuscarPorIdAsync(Guid pedidoId);
+        Task AtualizarStatusAsync(Guid pedidoId, string status);
     }
 }
