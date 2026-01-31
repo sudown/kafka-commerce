@@ -1,9 +1,12 @@
 ﻿using SistemaBase.Shared;
 using SistemaEstoque.Worker.Interfaces;
+using SistemaEstoque.Worker.Results;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace SistemaEstoque.Worker.UseCases
@@ -13,28 +16,61 @@ namespace SistemaEstoque.Worker.UseCases
         private readonly ILogger<BaixarEstoqueUseCase> _logger = logger;
         private readonly IEstoqueRepository _repository = repository;
 
-        public async Task<bool> ExecutarAsync(PedidoEvent pedido)
+        public async Task<ProcessamentoEstoqueResult> ExecutarAsync(PedidoEvent pedido)
         {
-            _logger.LogInformation($"Processando estoque do pedido {pedido.PedidoId}");
-            bool sucesso = true;
-            foreach (var item in pedido.Itens)
+            try
             {
-                var produtoEstoque = await _repository.BuscarPorIdAsync(item.ProdutoId);
-                if (produtoEstoque == null)
+                foreach (var item in pedido.Itens)
                 {
-                    _logger.LogError($"Produto {item.ProdutoId} não encontrado no estoque.");
-                    sucesso = false;
-                    continue;
+                    var produto = await _repository.BuscarPorIdAsync(item.ProdutoId);
+
+                    if (produto == null)
+                    {
+                        return new ProcessamentoEstoqueResult(false, $"Produto {item.ProdutoId} não encontrado", true);
+                    }
+
+                    try
+                    {
+                        produto.BaixarEstoque(item.Quantidade);
+                    }
+                    catch (ArgumentException)
+                    {
+                        return new ProcessamentoEstoqueResult(false, "Estoque insuficiente", true);
+                    }
+
+                    _repository.Atualizar(produto);
                 }
-                produtoEstoque.BaixarEstoque(item.Quantidade);
-                _repository.Atualizar(produtoEstoque);
-            }
-            if (sucesso)
-            {
+
                 await _repository.SalvaAsync();
-                _logger.LogInformation($"Estoque atualizado para o pedido {pedido.PedidoId}");
+                await MostrarPainelEstoque();
+                return new ProcessamentoEstoqueResult(true);
             }
-            return sucesso;
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"[TÉCNICO] Falha de infraestrutura no pedido {pedido.PedidoId}");
+                throw; // Lança para o Worker capturar no Polly
+            }
+        }
+
+        private async Task MostrarPainelEstoque()
+        {
+            var estoqueAtualizado = await _repository.ObterTodosAsync();
+
+            var tabela = "\n" +
+                "==================================================\n" +
+                "       PAINEL DE CONTROLE DE ESTOQUE (POSTGRES)   \n" +
+                "==================================================\n" +
+                " PRODUTO              | QTD ATUAL \n" +
+                "--------------------------------------------------\n";
+
+            foreach (var p in estoqueAtualizado)
+            {
+                tabela += $" {p.Nome.PadRight(20)} | {p.QuantidadeEstoque.ToString().PadLeft(8)} \n";
+            }
+
+            tabela += "==================================================";
+
+            _logger.LogInformation(tabela);
         }
     }
 }

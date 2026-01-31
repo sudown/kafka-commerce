@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using SistemaBase.Shared;
+using SistemaBase.Shared.Services;
 using SistemaPedidos.API.HttpModels.Pedido;
 using SistemaPedidos.API.Services;
 

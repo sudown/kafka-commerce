@@ -2,6 +2,7 @@ using Confluent.Kafka;
 using Polly;
 using Polly.Retry;
 using SistemaBase.Shared;
+using SistemaBase.Shared.Services;
 using SistemaEstoque.Worker.Interfaces;
 using SistemaEstoque.Worker.UseCases;
 using System.Text.Json;
@@ -42,28 +43,38 @@ public class Worker : BackgroundService
             var result = _consumer.Consume(stoppingToken);
             if (result == null) continue;
 
-            // Criando escopo para usar o Repository Scoped
-            using (var scope = _scopeFactory.CreateScope())
-            {
-                var baixarEstoqueUseCase = scope.ServiceProvider.GetRequiredService<BaixarEstoqueUseCase>();
-                var pedido = JsonSerializer.Deserialize<PedidoEvent>(result.Message.Value);
+            // Dentro do ExecuteAsync, no loop do Consumer...
+            using var scope = _scopeFactory.CreateScope();
+            var useCase = scope.ServiceProvider.GetRequiredService<BaixarEstoqueUseCase>();
+            var kafkaProducer = scope.ServiceProvider.GetRequiredService<IKafkaProducerService>();
+            var pedido = JsonSerializer.Deserialize<PedidoEvent>(result.Message.Value);
 
+            try
+            {
                 await _retryPolicy.ExecuteAsync(async () =>
                 {
-                    var sucesso = await baixarEstoqueUseCase.ExecutarAsync(pedido);
-                    if (sucesso)
+                    var resultado = await useCase.ExecutarAsync(pedido);
+
+                    if (resultado.Sucesso)
                     {
-                        _consumer.Commit(result);
+                        _logger.LogInformation($"[SUCESSO] Pedido {pedido.PedidoId} processado.");
                     }
-                    else
+                    else if (resultado.ErroNegocio)
                     {
-                        // Se o UseCase retornou falso (ex: produto não existe), 
-                        // talvez não adiante tentar de novo (erro de negócio).
-                        // Aqui você decidiria se manda para a DLQ.
-                        _logger.LogWarning($"Pedido {pedido.PedidoId} não pôde ser processado por regra de negócio.");
-                        _consumer.Commit(result);
+                        // CENTRALIZADO: Erro de negócio vai para o tópico de compensação
+                        _logger.LogWarning($"[NEGÓCIO] Desviando pedido {pedido.PedidoId} para estorno: {resultado.MensagemErro}");
+                        await kafkaProducer.PublicarAsync("pedidos-estoque-insuficiente", pedido);
                     }
+
+                    _consumer.Commit(result);
                 });
+            }
+            catch (Exception ex)
+            {
+                // CENTRALIZADO: Após 3 tentativas de infra, vai para a DLQ Técnica
+                _logger.LogCritical($"[DLQ] Falha técnica definitiva no pedido {pedido.PedidoId}");
+                await kafkaProducer.PublicarAsync("pedidos-erro-tecnico", pedido);
+                _consumer.Commit(result);
             }
         }
     }

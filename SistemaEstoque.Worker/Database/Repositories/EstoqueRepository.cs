@@ -29,6 +29,11 @@ namespace SistemaEstoque.Worker.Database.Repositories
             _context.Produtos.Add(produto);
         }
 
+        public async Task<List<Produto>> ObterTodosAsync()
+        {
+            return await _context.Produtos.AsNoTracking().ToListAsync();
+        }
+
         public Task SalvaAsync()
         {
             return _context.SaveChangesAsync();

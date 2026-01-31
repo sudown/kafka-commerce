@@ -1,9 +1,9 @@
 ﻿using Confluent.Kafka;
-using SistemaBase.Shared;
+using Microsoft.Extensions.Configuration;
 using System.Text.Json;
 using static Confluent.Kafka.ConfigPropertyNames;
 
-namespace SistemaPedidos.API.Services
+namespace SistemaBase.Shared.Services
 {
     public class KafkaProducerService : IKafkaProducerService
     {
@@ -24,6 +24,18 @@ namespace SistemaPedidos.API.Services
             };
 
             _producer = new ProducerBuilder<string, string>(config).Build();
+        }
+
+        public Task PublicarAsync<T>(string topic, T message)
+        {
+            var payload = JsonSerializer.Serialize<T>(message);
+            var kafkaMessage = new Message<string, string>
+            {
+                Key = Guid.NewGuid().ToString(),
+                Value = payload
+            };
+
+            return _producer.ProduceAsync(topic, kafkaMessage);
         }
 
         public async Task SendPedidoEventAsync(PedidoEvent pedido)

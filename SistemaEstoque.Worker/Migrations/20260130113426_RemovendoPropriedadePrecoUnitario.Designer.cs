@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using SistemaEstoque.Worker.Database.Context;
@@ -11,9 +12,11 @@ using SistemaEstoque.Worker.Database.Context;
 namespace SistemaEstoque.Worker.Migrations
 {
     [DbContext(typeof(EstoqueDbContext))]
-    partial class EstoqueDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260130113426_RemovendoPropriedadePrecoUnitario")]
+    partial class RemovendoPropriedadePrecoUnitario
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -38,26 +41,6 @@ namespace SistemaEstoque.Worker.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Produtos");
-
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("d290f1ee-6c54-4b01-90e6-d701748f0851"),
-                            Nome = "Teclado Mecânico RGB",
-                            QuantidadeEstoque = 50
-                        },
-                        new
-                        {
-                            Id = new Guid("a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d"),
-                            Nome = "Mouse Gamer 12000 DPI",
-                            QuantidadeEstoque = 100
-                        },
-                        new
-                        {
-                            Id = new Guid("f1234567-89ab-4cde-0123-456789abcdef"),
-                            Nome = "Monitor 144Hz",
-                            QuantidadeEstoque = 20
-                        });
                 });
 #pragma warning restore 612, 618
         }

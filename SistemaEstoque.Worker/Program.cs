@@ -16,4 +16,11 @@ builder.Services.AddScoped<BaixarEstoqueUseCase>();
 builder.Services.AddLogging();
 
 var host = builder.Build();
+
+using (var scope = host.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<EstoqueDbContext>();
+    await db.Database.MigrateAsync();
+}
+
 host.Run();
