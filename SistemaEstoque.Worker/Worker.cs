@@ -5,6 +5,7 @@ using SistemaBase.Shared;
 using SistemaBase.Shared.Services;
 using SistemaEstoque.Worker.Interfaces;
 using SistemaEstoque.Worker.UseCases;
+using System.Text;
 using System.Text.Json;
 
 namespace SistemaEstoque.Worker;
@@ -43,36 +44,43 @@ public class Worker : BackgroundService
         while (!stoppingToken.IsCancellationRequested)
         {
             var result = _consumer.Consume(stoppingToken);
+
+            var correlationBytes = result.Message.Headers.FirstOrDefault(h => h.Key == "CorrelationId")?.GetValueBytes();
+            var correlationId = correlationBytes != null ? Encoding.UTF8.GetString(correlationBytes) : "N/A";
+
             if (result == null) continue;
 
-            using var scope = _scopeFactory.CreateScope();
-            var useCase = scope.ServiceProvider.GetRequiredService<BaixarEstoqueUseCase>();
-            var pedido = JsonSerializer.Deserialize<PedidoEvent>(result.Message.Value);
-
-            try
+            using (_logger.BeginScope(new Dictionary<string, object> { ["CorrelationId"] = correlationId }))
             {
-                await _retryPolicy.ExecuteAsync(async () =>
+                using var scope = _scopeFactory.CreateScope();
+                var useCase = scope.ServiceProvider.GetRequiredService<BaixarEstoqueUseCase>();
+                var pedido = JsonSerializer.Deserialize<PedidoEvent>(result.Message.Value);
+
+                try
                 {
-                    var resultado = await useCase.ExecutarAsync(pedido);
-
-                    if (resultado.Sucesso)
+                    await _retryPolicy.ExecuteAsync(async () =>
                     {
-                        _logger.LogInformation("[SUCESSO] Pedido {PedidoId} processado.", pedido.PedidoId);
-                    }
-                    else if (resultado.ErroNegocio)
-                    {
-                        _logger.LogWarning($"[NEGÓCIO] Desviando pedido {pedido.PedidoId} para estorno: {resultado.MensagemErro}");
-                        await _kafkaProducer.PublicarAsync("pedidos-estoque-insuficiente", pedido);
-                    }
+                        var resultado = await useCase.ExecutarAsync(pedido);
 
+                        if (resultado.Sucesso)
+                        {
+                            _logger.LogInformation("[SUCESSO] Pedido {PedidoId} processado.", pedido.PedidoId);
+                        }
+                        else if (resultado.ErroNegocio)
+                        {
+                            _logger.LogWarning($"[NEGÓCIO] Desviando pedido {pedido.PedidoId} para estorno: {resultado.MensagemErro}");
+                            await _kafkaProducer.PublicarAsync("pedidos-estoque-insuficiente", pedido);
+                        }
+
+                        _consumer.Commit(result);
+                    });
+                }
+                catch (Exception)
+                {
+                    _logger.LogCritical("[DLQ] Falha técnica definitiva no pedido {PedidoId}", pedido.PedidoId);
+                    await _kafkaProducer.PublicarAsync("pedidos-erro-tecnico", pedido);
                     _consumer.Commit(result);
-                });
-            }
-            catch (Exception)
-            {
-                _logger.LogCritical("[DLQ] Falha técnica definitiva no pedido {PedidoId}", pedido.PedidoId);
-                await _kafkaProducer.PublicarAsync("pedidos-erro-tecnico", pedido);
-                _consumer.Commit(result);
+                }
             }
         }
     }

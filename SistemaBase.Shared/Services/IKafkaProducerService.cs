@@ -2,7 +2,7 @@
 {
     public interface IKafkaProducerService
     {
-        Task SendPedidoEventAsync(PedidoEvent pedido);
-        Task PublicarAsync<T>(string topic, T message);
+        Task SendPedidoEventAsync(PedidoEvent pedido, Dictionary<string, string>? headers = null);
+        Task PublicarAsync<T>(string topic, T message, Dictionary<string, string>? headers = null);
     }
 }

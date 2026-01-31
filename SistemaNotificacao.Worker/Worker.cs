@@ -31,9 +31,9 @@ public class Worker : BackgroundService
         var config = new ConsumerConfig
         {
             BootstrapServers = configuration["Kafka:BootstrapServers"],
-            GroupId = "notificacao-group", // Identifica este microsserviço
-            AutoOffsetReset = AutoOffsetReset.Earliest, // Lê desde o início se for novo
-            EnableAutoCommit = false // Vamos controlar o "OK" manualmente (mais seguro)
+            GroupId = "notificacao-group",
+            AutoOffsetReset = AutoOffsetReset.Earliest,
+            EnableAutoCommit = false
         };
 
         _consumer = new ConsumerBuilder<string, string>(config).Build();
@@ -45,12 +45,16 @@ public class Worker : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            try
-            {
-                // Tenta ler uma mensagem por 1 segundo
-                var consumeResult = _consumer.Consume(stoppingToken);
+            var consumeResult = _consumer.Consume(stoppingToken);
 
-                if (consumeResult != null)
+            var correlationBytes = consumeResult.Message.Headers.FirstOrDefault(h => h.Key == "CorrelationId")?.GetValueBytes();
+            var correlationId = correlationBytes != null ? Encoding.UTF8.GetString(correlationBytes) : "N/A";
+
+            if (consumeResult != null) continue;
+
+            using (_logger.BeginScope(new Dictionary<string, object> { ["CorrelationId"] = correlationId }))
+            {
+                try
                 {
                     await _retryPolicy.ExecuteAsync(async () =>
                     {
@@ -64,15 +68,14 @@ public class Worker : BackgroundService
 
                         await EnviarEmailFake(pedido);
 
-                        // Só fazemos o Commit se o Polly chegar até aqui com sucesso
                         _consumer.Commit(consumeResult);
                         _logger.LogInformation($"Pedido {pedido.PedidoId} processado e confirmado.");
                     });
                 }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Erro ao processar mensagem: {ex.Message}");
+                catch (Exception ex)
+                {
+                    _logger.LogError($"Erro ao processar mensagem: {ex.Message}");
+                }
             }
         }
     }

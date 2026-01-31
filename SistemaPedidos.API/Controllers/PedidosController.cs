@@ -11,16 +11,19 @@ namespace SistemaPedidos.API.Controllers
     public class PedidosController : ControllerBase
     {
         private readonly IKafkaProducerService _kafkaService;
+        private readonly ILogger<PedidosController> _logger;
 
-        public PedidosController(IKafkaProducerService kafkaProducerService)
+        public PedidosController(IKafkaProducerService kafkaProducerService, ILogger<PedidosController> logger)
         {
             _kafkaService = kafkaProducerService;
+            _logger = logger;
         }
 
         [HttpPost]
         public async Task<IActionResult> CriarPedido([FromBody] CriarPedidoRequest request, [FromServices] IPedidoRepository pedidoRepository)
         {
-            var pedidoEvent = new PedidoEvent
+            var correlationId = Guid.NewGuid().ToString();
+            var pedido = new PedidoEvent
             {
                 PedidoId = Guid.NewGuid(),
                 ClienteId = request.ClienteId,
@@ -35,16 +38,18 @@ namespace SistemaPedidos.API.Controllers
                 ValorTotal = request.Itens.Sum(i => i.Quantidade * i.PrecoUnitario)
             };
 
-            //Aqui você salvaria no MongoDB (Próximo passo!)
-            await pedidoRepository.CriarAsync(pedidoEvent);
+            await pedidoRepository.CriarAsync(pedido);
 
-            await _kafkaService.SendPedidoEventAsync(pedidoEvent);
-
-            return Ok(new
+            var headers = new Dictionary<string, string>
             {
-                Id = pedidoEvent.PedidoId,
-                Message = "Pedido recebido com sucesso!"
-            });
+                { "CorrelationId", correlationId }
+            };
+
+            _logger.LogInformation("[{CorrelationId}] Recebendo novo pedido para o cliente {ClienteId}", correlationId, pedido.ClienteId);
+
+            await _kafkaService.PublicarAsync("pedidos-realizados", pedido, headers);
+
+            return Accepted(new { CorrelationId = correlationId });
         }
 
         [HttpGet("{id:guid}")]
