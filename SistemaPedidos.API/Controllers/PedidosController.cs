@@ -10,7 +10,7 @@ namespace SistemaPedidos.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class PedidosController : ControllerBase
+    public class PedidosController : BaseController
     {
         private readonly IKafkaProducerService _kafkaService;
         private readonly ILogger<PedidosController> _logger;
@@ -25,22 +25,14 @@ namespace SistemaPedidos.API.Controllers
         public async Task<IActionResult> CriarPedido([FromBody] CriarPedidoRequest request, [FromServices] CriarPedidoUseCase criarPedidoUseCase)
         {
             var result = await criarPedidoUseCase.ExecutarAsync(request);
-
-            if (result.IsFailure)
-                return StatusCode((int)result.ErrorDetails!.Status!, result.ErrorDetails);
-
-            return CreatedAtAction(nameof(ObterPorId), new { id = result.Data!.PedidoId}, result.Data);
+            return ProcessResult(result);
         }
 
         [HttpGet("{id:guid}")]
         public async Task<IActionResult> ObterPorId(Guid id, [FromServices] ObterPedidoPorIdUseCase obterPedidoPorIdUseCase)
         {
             var result = await obterPedidoPorIdUseCase.ExecutarAsync(id);
-
-            if (result.IsFailure)
-                return StatusCode((int)result.ErrorDetails!.Status!, result.ErrorDetails);
-
-            return Ok(new ObterPedidoEventDTO(result.Data!));
+            return ProcessResult(result);
         }
     }
 }
