@@ -52,7 +52,7 @@ namespace SistemaPedidos.API.BackgroundServices
 
                             _logger.LogWarning("Estornando pedido {PedidoId} por falta de estoque.", pedidoErro.PedidoId);
 
-                            await repository.AtualizarStatusAsync(pedidoErro.PedidoId, "CANCELADO_SEM_ESTOQUE");
+                            await repository.AtualizarStatusAsync(pedidoErro.PedidoId, PedidoStatusEnum.CANCELADO_SEM_ESTOQUE);
                             _consumer.Commit(result);
                         }
                     }

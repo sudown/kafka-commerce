@@ -3,6 +3,8 @@ using SistemaBase.Shared;
 using SistemaBase.Shared.Services;
 using SistemaPedidos.API.HttpModels.Pedido;
 using SistemaPedidos.API.Services;
+using SistemaPedidos.API.UseCases;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace SistemaPedidos.API.Controllers
 {
@@ -20,49 +22,25 @@ namespace SistemaPedidos.API.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> CriarPedido([FromBody] CriarPedidoRequest request, [FromServices] IPedidoRepository pedidoRepository)
+        public async Task<IActionResult> CriarPedido([FromBody] CriarPedidoRequest request, [FromServices] CriarPedidoUseCase criarPedidoUseCase)
         {
-            var correlationId = Guid.NewGuid().ToString();
-            var pedido = new PedidoEvent
-            {
-                PedidoId = Guid.NewGuid(),
-                ClienteId = request.ClienteId,
-                DataCriacao = DateTime.UtcNow,
-                Itens = request.Itens.Select(i => new PedidoItemEvent
-                {
-                    ProdutoId = i.ProdutoId,
-                    Quantidade = i.Quantidade,
-                    PrecoUnitario = i.PrecoUnitario
-                }).ToList(),
-               
-                ValorTotal = request.Itens.Sum(i => i.Quantidade * i.PrecoUnitario)
-            };
+            var result = await criarPedidoUseCase.ExecutarAsync(request);
 
-            await pedidoRepository.CriarAsync(pedido);
+            if (result.IsFailure)
+                return StatusCode((int)result.ErrorDetails!.Status!, result.ErrorDetails);
 
-            var headers = new Dictionary<string, string>
-            {
-                { "CorrelationId", correlationId }
-            };
-
-            _logger.LogInformation("[{CorrelationId}] Recebendo novo pedido para o cliente {ClienteId}", correlationId, pedido.ClienteId);
-
-            await _kafkaService.PublicarAsync("pedidos-realizados", pedido, headers);
-
-            return Accepted(new { CorrelationId = correlationId, PedidoId = pedido.PedidoId });
+            return CreatedAtAction(nameof(ObterPorId), new { id = result.Data!.PedidoId}, result.Data);
         }
 
         [HttpGet("{id:guid}")]
-        public async Task<IActionResult> ObterPorId(Guid id, [FromServices] IPedidoRepository pedidoRepository)
+        public async Task<IActionResult> ObterPorId(Guid id, [FromServices] ObterPedidoPorIdUseCase obterPedidoPorIdUseCase)
         {
-            var pedido = await pedidoRepository.BuscarPorIdAsync(id);
+            var result = await obterPedidoPorIdUseCase.ExecutarAsync(id);
 
-            if (pedido == null)
-            {
-                return NotFound(new { Message = $"Pedido {id} não encontrado no MongoDB." });
-            }
+            if (result.IsFailure)
+                return StatusCode((int)result.ErrorDetails!.Status!, result.ErrorDetails);
 
-            return Ok(pedido);
+            return Ok(new ObterPedidoEventDTO(result.Data!));
         }
     }
 }
