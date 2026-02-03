@@ -10,7 +10,7 @@ using SistemaPedidos.API.UseCases;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddHostedService<SagaEstornoWorker>();
+builder.Services.AddHostedService<SagaPedidoWorker>();
 builder.Services.AddControllers();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddApplicationInsightsTelemetry();

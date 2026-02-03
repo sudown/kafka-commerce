@@ -1,5 +1,6 @@
 ﻿using SistemaBase.Shared;
 using SistemaPedidos.API.HttpModels;
+using SistemaPedidos.API.HttpModels.Pedido;
 using SistemaPedidos.API.Services;
 
 namespace SistemaPedidos.API.UseCases
@@ -15,19 +16,23 @@ namespace SistemaPedidos.API.UseCases
             _logger = logger;
         }
 
-        public async Task<ResultPattern<PedidoEvent>> ExecutarAsync(Guid pedidoId)
+        public async Task<ResultPattern<ObterPedidoEventDTO>> ExecutarAsync(Guid pedidoId)
         {
             try
             {
                 var pedido = await _pedidoRepository.BuscarPorIdAsync(pedidoId);
-                if (pedido == null)
-                    return ResultPattern<PedidoEvent>.NotFound("Pedido não encontrado.");
 
-                return ResultPattern<PedidoEvent>.SuccessResult(pedido);
-            } catch (Exception ex)
-            {
-                return ResultPattern<PedidoEvent>.InternalError("Erro ao obter o pedido: " + ex.Message);
+                if (pedido == null)
+                    return ResultPattern<ObterPedidoEventDTO>.NotFound("Pedido não encontrado.");
+
+                var dto = new ObterPedidoEventDTO(pedido);
+
+                return ResultPattern<ObterPedidoEventDTO>.SuccessResult(dto);
             }
-        } 
+            catch (Exception ex)
+            {
+                return ResultPattern<ObterPedidoEventDTO>.InternalError("Erro interno.");
+            }
+        }
     }
 }

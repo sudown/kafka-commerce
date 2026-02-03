@@ -2,6 +2,8 @@ using Confluent.Kafka;
 using Polly;
 using Polly.Retry;
 using SistemaBase.Shared;
+using SistemaNotificacao.Worker.DTOs;
+using SistemaNotificacao.Worker.Interfaces;
 using System.Text;
 using System.Text.Json;
 
@@ -11,11 +13,12 @@ public class Worker : BackgroundService
 {
     private readonly ILogger<Worker> _logger;
     private readonly IConsumer<string, string> _consumer;
-    private const string Topic = "pedidos-realizados";
+    private static readonly string[] Topics = ["pedidos-realizados", "pedidos-estoque-confirmado", "pedidos-estoque-insuficiente"];
     private readonly AsyncRetryPolicy _retryPolicy;
-    private readonly IProducer<string, string> _dlqProducer;
+    private readonly IServiceScopeFactory _scopeFactory;
 
-    public Worker(ILogger<Worker> logger, IConfiguration configuration)
+
+    public Worker(ILogger<Worker> logger, IConfiguration configuration, IServiceScopeFactory scopeFactory)
     {
         _logger = logger;
 
@@ -37,11 +40,12 @@ public class Worker : BackgroundService
         };
 
         _consumer = new ConsumerBuilder<string, string>(config).Build();
+        _scopeFactory = scopeFactory;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _consumer.Subscribe(Topic);
+        _consumer.Subscribe(Topics);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -58,18 +62,45 @@ public class Worker : BackgroundService
                 {
                     await _retryPolicy.ExecuteAsync(async () =>
                     {
-                        var pedido = JsonSerializer.Deserialize<PedidoEvent>(consumeResult.Message.Value);
+                        var pedido = JsonSerializer.Deserialize<PedidoEvent>(
+                            consumeResult!.Message.Value)!;
 
-                        _logger.LogInformation($"Processando notificação do pedido {pedido.PedidoId}...");
+                        var context = new PedidoNotificacaoContext
+                        {
+                            Topic = consumeResult.Topic,
+                            CorrelationId = correlationId,
+                            Pedido = pedido
+                        };
 
-                        // SIMULAÇÃO DE ERRO: 
-                        // Se você quiser testar o retry, descomente a linha abaixo:
-                        //throw new Exception("Serviço de e-mail fora do ar!");
+                        _logger.LogInformation(
+                            "Processando evento {Topic} para o pedido {PedidoId}",
+                            context.Topic,
+                            pedido.PedidoId
+                        );
 
-                        await EnviarEmailFake(pedido);
+                        using var scope = _scopeFactory.CreateScope();
+
+                        var handlers = scope.ServiceProvider
+                            .GetRequiredService<IEnumerable<IPedidoNotificacaoHandler>>();
+
+                        var handler = handlers.FirstOrDefault(h => h.CanHandle(context.Topic));
+
+                        if (handler is null)
+                        {
+                            _logger.LogWarning(
+                                "Nenhum handler registrado para o tópico {Topic}",
+                                context.Topic);
+                            return;
+                        }
+
+                        await handler.HandleAsync(context);
 
                         _consumer.Commit(consumeResult);
-                        _logger.LogInformation($"Pedido {pedido.PedidoId} processado e confirmado.");
+
+                        _logger.LogInformation(
+                            "Evento do pedido {PedidoId} processado com sucesso.",
+                            pedido.PedidoId
+                        );
                     });
                 }
                 catch (Exception ex)

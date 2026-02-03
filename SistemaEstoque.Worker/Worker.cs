@@ -61,15 +61,17 @@ public class Worker : BackgroundService
                     await _retryPolicy.ExecuteAsync(async () =>
                     {
                         var resultado = await useCase.ExecutarAsync(pedido);
+                        var headers = new Dictionary<string, string> { { "CorrelationId", correlationId } };
 
                         if (resultado.Sucesso)
                         {
+                            await _kafkaProducer.PublicarAsync("pedidos-estoque-confirmado", pedido, headers);
                             _logger.LogInformation("[SUCESSO] Pedido {PedidoId} processado.", pedido.PedidoId);
                         }
                         else if (resultado.ErroNegocio)
                         {
+                            await _kafkaProducer.PublicarAsync("pedidos-estoque-insuficiente", pedido, headers);
                             _logger.LogWarning($"[NEGÓCIO] Desviando pedido {pedido.PedidoId} para estorno: {resultado.MensagemErro}");
-                            await _kafkaProducer.PublicarAsync("pedidos-estoque-insuficiente", pedido);
                         }
 
                         _consumer.Commit(result);

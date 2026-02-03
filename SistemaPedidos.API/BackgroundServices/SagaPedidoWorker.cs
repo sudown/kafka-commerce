@@ -6,18 +6,18 @@ using System.Text.Json;
 
 namespace SistemaPedidos.API.BackgroundServices
 {
-    public class SagaEstornoWorker : BackgroundService
+    public class SagaPedidoWorker : BackgroundService
     {
         private readonly IConsumer<string, string> _consumer;
         private readonly IServiceProvider _serviceProvider;
-        private readonly ILogger<SagaEstornoWorker> _logger;
+        private readonly ILogger<SagaPedidoWorker> _logger;
 
-        public SagaEstornoWorker(IConfiguration config, IServiceProvider serviceProvider, ILogger<SagaEstornoWorker> logger)
+        public SagaPedidoWorker(IConfiguration config, IServiceProvider serviceProvider, ILogger<SagaPedidoWorker> logger)
         {
             var consumerConfig = new ConsumerConfig
             {
                 BootstrapServers = config["Kafka:BootstrapServers"],
-                GroupId = "saga-estorno-group",
+                GroupId = "saga-pedido-group",
                 AutoOffsetReset = AutoOffsetReset.Earliest,
                 EnableAutoCommit = false
             };
@@ -29,7 +29,10 @@ namespace SistemaPedidos.API.BackgroundServices
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             await Task.Yield();
-            _consumer.Subscribe("pedidos-estoque-insuficiente");
+            _consumer.Subscribe(new[] {
+                "pedidos-estoque-confirmado",
+                "pedidos-estoque-insuficiente"
+            });
 
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -38,23 +41,24 @@ namespace SistemaPedidos.API.BackgroundServices
                     var result = _consumer.Consume(stoppingToken);
                     if (result == null) continue;
 
-                    // Extrair CorrelationId para manter o rastro
                     var correlationBytes = result.Message.Headers.FirstOrDefault(h => h.Key == "CorrelationId")?.GetValueBytes();
                     var correlationId = correlationBytes != null ? Encoding.UTF8.GetString(correlationBytes) : "N/A";
 
                     using (_logger.BeginScope(new Dictionary<string, object> { ["CorrelationId"] = correlationId }))
                     {
-                        var pedidoErro = JsonSerializer.Deserialize<PedidoEvent>(result.Message.Value);
+                        var evento = JsonSerializer.Deserialize<PedidoEvent>(result.Message.Value);
 
-                        using (var scope = _serviceProvider.CreateScope())
+                        var novoStatus = result.Topic switch
                         {
-                            var repository = scope.ServiceProvider.GetRequiredService<IPedidoRepository>();
+                            "pedidos-estoque-confirmado" => PedidoStatusEnum.APROVADO,
+                            "pedidos-estoque-insuficiente" => PedidoStatusEnum.CANCELADO_SEM_ESTOQUE,
+                            _ => PedidoStatusEnum.PROCESSANDO
+                        };
 
-                            _logger.LogWarning("Estornando pedido {PedidoId} por falta de estoque.", pedidoErro.PedidoId);
+                        await AtualizarStatusNoBanco(evento.PedidoId, novoStatus);
 
-                            await repository.AtualizarStatusAsync(pedidoErro.PedidoId, PedidoStatusEnum.CANCELADO_SEM_ESTOQUE);
-                            _consumer.Commit(result);
-                        }
+                        _consumer.Commit(result);
+                        _logger.LogInformation("Saga: Pedido {PedidoId} atualizado para {Status}", evento.PedidoId, novoStatus);
                     }
                 }
                 catch (OperationCanceledException) { break; }
@@ -63,6 +67,13 @@ namespace SistemaPedidos.API.BackgroundServices
                     _logger.LogError(ex, "Erro no worker de Saga.");
                 }
             }
+        }
+        private async Task AtualizarStatusNoBanco(Guid pedidoId, PedidoStatusEnum status)
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var repository = scope.ServiceProvider.GetRequiredService<IPedidoRepository>();
+
+            await repository.AtualizarStatusAsync(pedidoId, status);
         }
     }
 }
