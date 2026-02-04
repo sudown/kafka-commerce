@@ -17,8 +17,10 @@ builder.Services.AddApplicationInsightsTelemetry();
 builder.Services.AddScoped<CriarPedidoUseCase>();
 builder.Services.AddScoped<ObterPedidoPorIdUseCase>();
 builder.AddStandardOpenTelemetry();
+builder.Host.AddStandardLogging();
 
 var app = builder.Build();
+
 
 app.UseSwaggerDocumentation(app.Environment);
 app.UseHttpsRedirection();

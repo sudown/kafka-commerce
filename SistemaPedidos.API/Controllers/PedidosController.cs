@@ -25,13 +25,6 @@ namespace SistemaPedidos.API.Controllers
         [HttpPost]
         public async Task<IActionResult> CriarPedido([FromBody] CriarPedidoRequest request, [FromServices] CriarPedidoUseCase criarPedidoUseCase)
         {
-            var activity = Activity.Current;
-
-            if (activity != null)
-            {
-                activity.SetTag("business.client_id", request.ClienteId);
-            }
-
             var result = await criarPedidoUseCase.ExecutarAsync(request);
             return ProcessResult(result);
         }
