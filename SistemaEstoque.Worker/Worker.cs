@@ -86,4 +86,10 @@ public class Worker : BackgroundService
             }
         }
     }
+    public override void Dispose()
+    {
+        _consumer.Close();
+        _consumer.Dispose();
+        base.Dispose();
+    }
 }

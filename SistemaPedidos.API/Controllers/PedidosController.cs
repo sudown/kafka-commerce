@@ -4,6 +4,7 @@ using SistemaBase.Shared.Services;
 using SistemaPedidos.API.HttpModels.Pedido;
 using SistemaPedidos.API.Services;
 using SistemaPedidos.API.UseCases;
+using System.Diagnostics;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace SistemaPedidos.API.Controllers
@@ -24,6 +25,13 @@ namespace SistemaPedidos.API.Controllers
         [HttpPost]
         public async Task<IActionResult> CriarPedido([FromBody] CriarPedidoRequest request, [FromServices] CriarPedidoUseCase criarPedidoUseCase)
         {
+            var activity = Activity.Current;
+
+            if (activity != null)
+            {
+                activity.SetTag("business.client_id", request.ClienteId);
+            }
+
             var result = await criarPedidoUseCase.ExecutarAsync(request);
             return ProcessResult(result);
         }

@@ -1,8 +1,11 @@
 ﻿using Confluent.Kafka;
 using Microsoft.Extensions.Configuration;
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using static Confluent.Kafka.ConfigPropertyNames;
+using OpenTelemetry;
+using OpenTelemetry.Context.Propagation;
 
 namespace SistemaBase.Shared.Services
 {
@@ -25,25 +28,28 @@ namespace SistemaBase.Shared.Services
             _producer = new ProducerBuilder<string, string>(config).Build();
         }
 
-        public Task PublicarAsync<T>(string topic, T message, Dictionary<string, string>? headers = null)
+        public async Task PublicarAsync<T>(string topico, T mensagem, Dictionary<string, string>? headers = null)
         {
-            var payload = JsonSerializer.Serialize<T>(message);
             var kafkaMessage = new Message<string, string>
             {
                 Key = Guid.NewGuid().ToString(),
-                Value = payload,
-                Headers = []
+                Value = JsonSerializer.Serialize(mensagem),
+                Headers = new Headers()
             };
 
-            if(headers != null)
+            // 1. Injetar o Contexto do OpenTelemetry nos Headers do Kafka
+            var activityContext = Activity.Current?.Context ?? default;
+            Propagators.DefaultTextMapPropagator.Inject(new PropagationContext(activityContext, Baggage.Current),
+                kafkaMessage.Headers,
+                (headers, key, value) => headers.Add(key, Encoding.UTF8.GetBytes(value)));
+
+            // 2. Adicionar seus headers manuais (como o CorrelationId)
+            if (headers != null)
             {
-                foreach (var header in headers)
-                {
-                    kafkaMessage.Headers.Add(header.Key, Encoding.UTF8.GetBytes(header.Value));
-                }
+                foreach (var h in headers) kafkaMessage.Headers.Add(h.Key, Encoding.UTF8.GetBytes(h.Value));
             }
 
-            return _producer.ProduceAsync(topic, kafkaMessage);
+            await _producer.ProduceAsync(topico, kafkaMessage);
         }
 
         public async Task SendPedidoEventAsync(PedidoEvent pedido, Dictionary<string, string>? headers = null)

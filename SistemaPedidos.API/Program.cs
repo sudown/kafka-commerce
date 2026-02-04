@@ -16,7 +16,7 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddApplicationInsightsTelemetry();
 builder.Services.AddScoped<CriarPedidoUseCase>();
 builder.Services.AddScoped<ObterPedidoPorIdUseCase>();
-
+builder.AddStandardOpenTelemetry();
 
 var app = builder.Build();
 
