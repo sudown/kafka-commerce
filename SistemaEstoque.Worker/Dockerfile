@@ -1,27 +1,29 @@
-# ESTÁGIO 1: Build
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+# ESTAGIO 1: Build
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 
-# Copia os arquivos de projeto (.csproj) primeiro para aproveitar o cache de camadas
+# Copiamos os caminhos relativos à raiz da solução
+# Isso exige que o 'docker build' seja executado na raiz da pasta do projeto
 COPY ["SistemaEstoque.Worker/SistemaEstoque.Worker.csproj", "SistemaEstoque.Worker/"]
 COPY ["SistemaBase.Shared/SistemaBase.Shared.csproj", "SistemaBase.Shared/"]
 
-# Restaura as dependências
+# Restaura as dependências usando o caminho do projeto principal
 RUN dotnet restore "SistemaEstoque.Worker/SistemaEstoque.Worker.csproj"
 
-# Copia o restante do código fonte
+# Copia todo o código fonte (incluindo a pasta Shared e a pasta do Worker)
 COPY . .
 
-# Compila o Worker de Estoque (isso automaticamente compila o Shared como dependência)
+# Compila e publica em uma única etapa para otimizar a imagem
 WORKDIR "/src/SistemaEstoque.Worker"
-RUN dotnet build "SistemaEstoque.Worker.csproj" -c Release -o /app/build
+RUN dotnet publish "SistemaEstoque.Worker.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
-# ESTÁGIO 2: Publish
-FROM build AS publish
-RUN dotnet publish "SistemaEstoque.Worker.csproj" -c Release -o /app/publish
-
-# ESTÁGIO 3: Runtime (Imagem final leve)
-FROM mcr.microsoft.com/dotnet/runtime:8.0 AS final
+# ESTÁGIO 2: Runtime
+# Para Workers, a imagem 'aspnet' por conter as libs de Hosting necessárias
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 WORKDIR /app
-COPY --from=publish /app/publish .
+
+# Copia os arquivos publicados
+COPY --from=build /app/publish .
+
+# Define o ponto de entrada
 ENTRYPOINT ["dotnet", "SistemaEstoque.Worker.dll"]
