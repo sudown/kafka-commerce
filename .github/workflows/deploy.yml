@@ -12,7 +12,10 @@ jobs:
   build-and-push:
     name: Build and Push to ECR
     runs-on: ubuntu-latest
-    # Adicionando permissões necessárias para autenticação AWS e leitura de código
+    # VITAL: Informa ao GitHub que este job usa o ambiente 'env' criado por você
+    environment: env
+    
+    # Permissões necessárias para autenticação OIDC e leitura
     permissions:
       id-token: write
       contents: read
@@ -22,10 +25,10 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Configure AWS Credentials
+      # Atualizado para a versão mais recente conforme solicitado
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        # Certifique-se de que estes nomes batem EXATAMENTE com o que você criou em:
-        # Settings > Secrets and variables > Actions
+        # O prefixo 'secrets.' é obrigatório, mas agora ele buscará dentro do seu environment 'env'
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: us-east-1
@@ -55,6 +58,8 @@ jobs:
     name: Deploy to EC2 via SSH
     needs: build-and-push
     runs-on: ubuntu-latest
+    # Também declaramos o environment aqui para acessar as chaves da EC2 (IP e SSH Key)
+    environment: env
     
     steps:
     - name: Executing remote ssh commands
@@ -65,7 +70,6 @@ jobs:
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
           # 1. Autenticar no ECR dentro da EC2
-          # Nota: Garanta que o AWS CLI esteja instalado na sua EC2
           aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 815598786949.dkr.ecr.us-east-1.amazonaws.com
           
           # 2. Ir para a pasta do projeto
@@ -74,11 +78,8 @@ jobs:
           # 3. Puxar as imagens novas
           docker-compose -f docker-compose.prod.yml pull
           
-          # 4. Reiniciar os containers (apenas os que mudaram)
+          # 4. Reiniciar os containers
           docker-compose -f docker-compose.prod.yml up -d
           
-          # 5. Limpar imagens e containers antigos para liberar espaço
-          docker image prune -f
-          
-          # 5. Limpar imagens antigas (opcional para economizar disco)
+          # 5. Limpar imagens antigas
           docker image prune -f
