@@ -1,0 +1,80 @@
+services:
+  # --- INFRAESTRUTURA ---
+
+  postgres:
+    image: postgres:latest
+    container_name: postgres-db
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: estoque_db
+    networks:
+      - ekommerce-network
+
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb-pedidos
+    networks:
+      - ekommerce-network
+
+  kafka:
+    image: apache/kafka:latest
+    container_name: kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_NUM_PARTITIONS: 3
+    networks: # Corrigido: Agora fora do environment
+      - ekommerce-network
+    restart: unless-stopped
+
+  api-pedidos:
+    image: 815598786949.dkr.ecr.us-east-1.amazonaws.com/ekommerce/api-pedidos:latest
+    container_name: api-pedidos
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - Kafka__BootstrapServers=kafka:9092
+      - MongoDbSettings__ConnectionString=mongodb://mongodb:27017
+    ports:
+      - "80:8080"
+    depends_on:
+      - kafka
+      - mongodb
+    networks:
+      - ekommerce-network
+
+  worker-estoque:
+    image: 815598786949.dkr.ecr.us-east-1.amazonaws.com/ekommerce/worker-estoque:latest
+    container_name: worker-estoque
+    environment:
+      - Kafka__BootstrapServers=kafka:9092
+      - ConnectionStrings__DefaultConnection=Host=postgres;Database=estoque_db;Username=user;Password=password
+    depends_on:
+      - kafka
+      - postgres
+    networks:
+      - ekommerce-network
+
+  worker-notificacao:
+    image: 815598786949.dkr.ecr.us-east-1.amazonaws.com/ekommerce/worker-notificacao:latest
+    container_name: worker-notificacao
+    environment:
+      - Kafka__BootstrapServers=kafka:9092
+    depends_on:
+      - kafka
+    networks:
+      - ekommerce-network
+
+networks:
+  ekommerce-network:
+    driver: bridge
